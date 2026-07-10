@@ -110,11 +110,22 @@
             margin-bottom: 4rem;
         }
 
-        @media (min-width: 768px) {
+        /* 大屏自适应 3 列布局 (图片/视频/下载并排，博客另起一行) */
+        @media (min-width: 992px) {
+            .grid-container {
+                grid-template-columns: 1fr 1fr 1fr;
+            }
+            .grid-full-width {
+                grid-column: span 3;
+            }
+        }
+
+        /* 中等屏幕 2 列布局 */
+        @media (min-width: 768px) and (max-width: 991px) {
             .grid-container {
                 grid-template-columns: 1fr 1fr;
             }
-            .grid-full {
+            .grid-full-width {
                 grid-column: span 2;
             }
         }
@@ -131,6 +142,9 @@
             transition: var(--transition-smooth);
             position: relative;
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
 
         .glass-card::before {
@@ -191,6 +205,7 @@
             font-weight: 300;
             position: relative;
             z-index: 2;
+            flex-grow: 1;
         }
 
         /* 1. 图片灯箱展示 */
@@ -203,6 +218,7 @@
             border: 1px solid rgba(255, 255, 255, 0.05);
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
             z-index: 2;
+            margin-top: auto;
         }
 
         .image-card-wrapper img {
@@ -304,6 +320,7 @@
             box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
             border: 1px solid rgba(255, 255, 255, 0.05);
             z-index: 2;
+            margin-top: auto;
         }
 
         .player-card-wrapper video {
@@ -325,6 +342,7 @@
             margin-bottom: 2rem;
             position: relative;
             z-index: 2;
+            margin-top: auto;
         }
 
         .file-avatar {
@@ -550,11 +568,11 @@
                 </div>
                 <h2>在线多媒体流</h2>
             </div>
-            <p class="card-text">内嵌 HTML5 原生在线视频流媒体播放，外层包裹带 24px 圆角和细腻融合阴影的高颜值播放框架。</p>
+            <p class="card-text">内嵌本地视频播放，外层包裹带 24px 圆角和细腻融合阴影的高颜值播放框架。</p>
             
             <div class="player-card-wrapper">
                 <video controls poster="https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=800">
-                    <source src="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4" type="video/mp4">
+                    <source src="/videos/demo-video.mp4" type="video/mp4">
                     您的浏览器不支持视频播放标签。
                 </video>
             </div>
@@ -566,28 +584,28 @@
                 <div class="card-icon">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
                 </div>
-                <h2>工程包安全下载</h2>
+                <h2>资源安全下载</h2>
             </div>
-            <p class="card-text">一键下载演示工程或编译后的包文件，免弹窗拦截与广告劫持。按钮具备动态呼吸渐变特效。</p>
+            <p class="card-text">支持本地大文件直接安全下载，免弹窗拦截与广告劫持。按钮具备动态呼吸渐变特效。</p>
             
             <div class="download-box">
                 <div class="file-avatar">
-                    📦
+                    📄
                 </div>
                 <div class="file-info">
-                    <h4>hsxy-template.zip</h4>
-                    <p>文件大小: 1.45 MB | 版本: v1.0.0</p>
+                    <h4>aa.pdf</h4>
+                    <p>文件大小: ~12 KB | 格式: PDF 文档</p>
                 </div>
             </div>
             
-            <button class="interactive-btn" onclick="alert('这是安全下载文件触发演示！')">
+            <a href="/downloads/aa.pdf" download class="interactive-btn" style="text-decoration: none;">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                立即获取配套工程包
-            </button>
+                立即下载 PDF
+            </a>
         </div>
 
-        <!-- 模块 4: RSS 文章订阅动态抓取 -->
-        <div class="glass-card">
+        <!-- 模块 4: 最新博客文章 (动态 RSS 抓取，大屏占满整行) -->
+        <div class="glass-card grid-full-width">
             <div class="card-header">
                 <div class="card-icon">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11a9 9 0 0 1 9 9"></path><path d="M4 4a16 16 0 0 1 16 16"></path><circle cx="5" cy="19" r="1"></circle></svg>
@@ -627,7 +645,6 @@
     <!-- 页脚 -->
     <footer>
         <p>&copy; 2026 hsxy Lab. Created via Cloudflare Pages AI Workstation.</p>
-        <p style="margin-top: 0.5rem; font-size: 0.75rem; font-weight: 300;">技术支持：<a href="https://51.ruyo.net/19349.html" target="_blank">如有乐享 51.ruyo.net</a></p>
     </footer>
 
     <!-- 原生交互 JS -->
@@ -652,7 +669,6 @@
         async function loadRSSFeed() {
             const container = document.getElementById('rss-feed-container');
             const rssSource = 'https://51.ruyo.net/feed';
-            // 使用公共跨域转换接口 api.rss2json.com
             const parserApi = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssSource)}`;
             
             try {
@@ -673,7 +689,6 @@
                             day: '2-digit'
                         });
                         
-                        // 剥离 HTML 标签以展示纯文本简介
                         const tempDiv = document.createElement('div');
                         tempDiv.innerHTML = article.description || article.content;
                         const cleanDesc = tempDiv.textContent.trim().substring(0, 75) + '...';
@@ -695,7 +710,6 @@
                 }
             } catch (err) {
                 console.warn('RSS 动态加载失败，使用降级默认展示数据:', err);
-                // 异常回退兜底，输出教程里的静态参考内容
                 container.innerHTML = `
                     <div class="feed-card">
                         <h3><a href="https://51.ruyo.net/19349.html" target="_blank">Cloudflare Pages免费申请教程：抢注专属 .pages.dev 域名</a></h3>
