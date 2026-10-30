@@ -1,0 +1,60 @@
+name: OPlusX Android Build
+
+on:
+  push:
+    branches:
+      - feature/oplusx-stage0
+    paths:
+      - "projects/OPlusX/**"
+      - ".github/workflows/oplusx-build.yml"
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "projects/OPlusX/**"
+      - ".github/workflows/oplusx-build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oplusx-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-debug-apk:
+    name: Build debug APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+
+      - name: Assemble debug APK
+        run: gradle -p projects/OPlusX/source --no-daemon clean assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: OPlusX-debug-apk
+          path: projects/OPlusX/source/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 30
