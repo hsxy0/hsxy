@@ -58,6 +58,8 @@ class StatusBarFeatureController(
         registerSettingsObserver()
         registerAudioCallback()
         readSettings()
+        applyVisibility()
+        updateMask()
         updateMediaRoute()
     }
 
