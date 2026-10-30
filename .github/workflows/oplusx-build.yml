@@ -51,6 +51,16 @@ jobs:
       - name: Assemble debug APK
         run: gradle -p projects/OPlusX/source --no-daemon clean assembleDebug
 
+      - name: Verify Xposed entry asset
+        shell: bash
+        run: |
+          APK="projects/OPlusX/source/app/build/outputs/apk/debug/app-debug.apk"
+          test -f "$APK"
+          ENTRY="$(unzip -p "$APK" assets/xposed_init | tr -d '\\r\\n')"
+          test -n "$ENTRY"
+          echo "Packaged Xposed entry: $ENTRY"
+          unzip -l "$APK" | grep -E 'assets/xposed_init|META-INF/yukihookapi_init'
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
