@@ -48,6 +48,8 @@ class StatusBarFeatureController(
     private var mediaEnabled = true
     private var maskEnabled = true
     private var routeName = "媒体输出设备"
+    private var lastRouteKey = ""
+    private val routeRefreshStarted = AtomicBoolean(false)
     private val observerRegistered = AtomicBoolean(false)
     private val audioCallbackRegistered = AtomicBoolean(false)
     private val routeDrawable by lazy { MediaRouteDrawable(context.resources.displayMetrics.density) }
@@ -61,6 +63,7 @@ class StatusBarFeatureController(
         applyVisibility()
         updateMask()
         updateMediaRoute()
+        startRouteRefresh()
     }
 
     private fun dp(value: Int): Int =
@@ -163,6 +166,17 @@ class StatusBarFeatureController(
         mediaIcon?.visibility = if (mediaEnabled) View.VISIBLE else View.GONE
     }
 
+    private fun startRouteRefresh() {
+        if (!routeRefreshStarted.compareAndSet(false, true)) return
+        val refresh = object : Runnable {
+            override fun run() {
+                updateMediaRoute()
+                mainHandler.postDelayed(this, 2500L)
+            }
+        }
+        mainHandler.postDelayed(refresh, 2500L)
+    }
+
     private fun updateMediaRoute() {
         val currentRoot = root ?: return
         val audio = currentRoot.context.getSystemService(AudioManager::class.java)
@@ -171,7 +185,11 @@ class StatusBarFeatureController(
             audio?.getAudioDevicesForAttributes(attributes)?.firstOrNull()
         }.getOrNull()
         val deviceType = route?.type ?: AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
-        routeName = route?.productName?.toString()?.takeIf { it.isNotBlank() } ?: routeLabel(deviceType)
+        val resolvedName = route?.productName?.toString()?.takeIf { it.isNotBlank() } ?: routeLabel(deviceType)
+        val routeKey = deviceType.toString() + "|" + resolvedName
+        if (routeKey == lastRouteKey) return
+        lastRouteKey = routeKey
+        routeName = resolvedName
         routeDrawable.setRoute(deviceType)
         val tint = batteryIcon?.imageTintList?.defaultColor ?: Color.WHITE
         routeDrawable.setColor(tint)
