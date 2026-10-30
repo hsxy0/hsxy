@@ -56,7 +56,7 @@ jobs:
         run: |
           APK="projects/OPlusX/source/app/build/outputs/apk/debug/app-debug.apk"
           test -f "$APK"
-          ENTRY="$(unzip -p "$APK" assets/xposed_init | tr -d '\\r\\n')"
+          ENTRY="$(unzip -p "$APK" assets/xposed_init | tr -d '\r\n')"
           test -n "$ENTRY"
           echo "Packaged Xposed entry: $ENTRY"
           unzip -l "$APK" | grep -E 'assets/xposed_init|META-INF/yukihookapi_init'
