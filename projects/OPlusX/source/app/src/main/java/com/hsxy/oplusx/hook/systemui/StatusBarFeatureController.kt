@@ -99,7 +99,7 @@ class StatusBarFeatureController(
                     marginEnd = dp(3)
                     gravity = android.view.Gravity.CENTER_VERTICAL
                 }
-                val index = icons.indexOfChild(battery).let { if (it < 0) icons.childCount else it }
+                val index = 0
                 if (icons is LinearLayout) {
                     icons.addView(icon, index, params)
                 } else {
@@ -190,12 +190,40 @@ class StatusBarFeatureController(
         if (routeKey == lastRouteKey) return
         lastRouteKey = routeKey
         routeName = resolvedName
-        routeDrawable.setRoute(deviceType)
-        val tint = batteryIcon?.imageTintList?.defaultColor ?: Color.WHITE
-        routeDrawable.setColor(tint)
+        routeDrawable.setRoute(deviceType, resolvedName)
+        routeDrawable.setColor(resolveStatusBarIconTint())
         mediaIcon?.contentDescription = "媒体输出设备：$routeName"
         mediaIcon?.visibility = if (mediaEnabled) View.VISIBLE else View.GONE
         mediaIcon?.invalidate()
+    }
+
+    private fun resolveStatusBarIconTint(): Int {
+        // ColorOS may render dark or light status icons depending on wallpaper/theme.
+        // Prefer live tint from a neighboring SystemUI icon, rather than hard-coding white.
+        fun findTint(view: View?): Int? {
+            if (view == null) return null
+            if (view is ImageView) {
+                view.imageTintList?.defaultColor?.let { return it }
+                view.drawable?.let { drawable ->
+                    if (android.os.Build.VERSION.SDK_INT >= 29) {
+                        drawable.colorFilter?.let { filter ->
+                            // ColorFilter is opaque; don't guess a color from it.
+                        }
+                    }
+                }
+            }
+            if (view is ViewGroup) {
+                for (i in 0 until view.childCount) findTint(view.getChildAt(i))?.let { return it }
+            }
+            return null
+        }
+        val icons = systemIcons
+        val wifiId = findId("wifi_signal")
+        val mobileId = findId("mobile_signal")
+        return findTint(if (wifiId != 0) icons?.findViewById(wifiId) else null)
+            ?: findTint(if (mobileId != 0) icons?.findViewById(mobileId) else null)
+            ?: batteryIcon?.imageTintList?.defaultColor
+            ?: Color.BLACK
     }
 
     private fun routeLabel(type: Int): String = when (type) {
@@ -227,10 +255,17 @@ class StatusBarFeatureController(
     private fun updateMaskBounds() {
         val image = batteryIcon ?: return
         val drawable = mask ?: return
-        val width = dp(4)
-        val height = dp(6)
-        val left = (image.width - dp(7)).coerceAtLeast(0)
-        val top = ((image.height - height) / 2).coerceAtLeast(0)
+        val glyph = image.drawable?.bounds
+        val glyphLeft = glyph?.left ?: 0
+        val glyphRight = glyph?.right?.takeIf { it > glyphLeft } ?: image.width
+        val glyphTop = glyph?.top ?: 0
+        val glyphBottom = glyph?.bottom?.takeIf { it > glyphTop } ?: image.height
+        val width = dp(3)
+        val height = dp(4)
+        // Keep the mask a little inside the actual battery silhouette; never anchor to
+        // the ImageView's outer edge, which can include large transparent side margins.
+        val left = (glyphRight - width - dp(3)).coerceAtLeast(glyphLeft)
+        val top = (glyphTop + (glyphBottom - glyphTop - height) / 2).coerceAtLeast(0)
         drawable.setBounds(left, top, left + width, top + height)
     }
 
@@ -257,9 +292,11 @@ class StatusBarFeatureController(
             color = Color.WHITE
         }
         private var routeType = AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+        private var productName = ""
 
-        fun setRoute(type: Int) {
+        fun setRoute(type: Int, name: String = "") {
             routeType = type
+            productName = name.lowercase()
             invalidateSelf()
         }
 
@@ -274,7 +311,13 @@ class StatusBarFeatureController(
             canvas.translate(b.left.toFloat(), b.top.toFloat())
             val scale = minOf(b.width(), b.height()).toFloat() / 24f
             canvas.scale(scale, scale)
-            if (isHeadset(routeType)) drawHeadset(canvas) else drawSpeaker(canvas)
+            when {
+                !isHeadset(routeType) -> drawSpeaker(canvas)
+                productName.contains("eyewear") || productName.contains("眼镜") -> drawSmartGlasses(canvas)
+                productName.contains("airpods") || productName.contains("freebuds 5") || productName.contains("半入耳") -> drawOpenFitBuds(canvas)
+                productName.contains("wh-1000") || productName.contains("xm3") || productName.contains("头戴") -> drawOverEarHeadphones(canvas)
+                else -> drawInEarBuds(canvas)
+            }
             canvas.restoreToCount(save)
         }
 
@@ -298,6 +341,52 @@ class StatusBarFeatureController(
             canvas.drawArc(RectF(10f, 7f, 19f, 17f), -55f, 110f, false, paint)
             canvas.drawArc(RectF(9f, 3.5f, 23f, 20.5f), -52f, 104f, false, paint)
             paint.style = old
+        }
+
+        private fun drawInEarBuds(canvas: Canvas) {
+            // Two compact stemmed in-ear earbuds, matching the first recommended icon family.
+            val left = Path().apply {
+                moveTo(5f, 5f); cubicTo(2.5f, 5f, 2.5f, 9f, 5f, 10f)
+                lineTo(7f, 12f); lineTo(7f, 19f); lineTo(9.5f, 19f); lineTo(9.5f, 11f)
+                cubicTo(9.5f, 9f, 7f, 8f, 7f, 6f); close()
+            }
+            val right = Path().apply {
+                moveTo(16f, 5f); cubicTo(13.5f, 5f, 13.5f, 9f, 16f, 10f)
+                lineTo(18f, 12f); lineTo(18f, 19f); lineTo(20.5f, 19f); lineTo(20.5f, 11f)
+                cubicTo(20.5f, 9f, 18f, 8f, 18f, 6f); close()
+            }
+            val old = paint.style
+            paint.style = Paint.Style.FILL
+            canvas.drawPath(left, paint)
+            canvas.drawPath(right, paint)
+            paint.style = old
+        }
+
+        private fun drawOpenFitBuds(canvas: Canvas) {
+            val old = paint.style
+            paint.style = Paint.Style.STROKE
+            canvas.drawArc(RectF(3f, 4f, 12f, 14f), 185f, 170f, false, paint)
+            canvas.drawArc(RectF(12f, 4f, 21f, 14f), 185f, 170f, false, paint)
+            canvas.drawRoundRect(RectF(5f, 8f, 9f, 15f), 1.8f, 1.8f, paint)
+            canvas.drawRoundRect(RectF(15f, 8f, 19f, 15f), 1.8f, 1.8f, paint)
+            paint.style = old
+        }
+
+        private fun drawOverEarHeadphones(canvas: Canvas) {
+            canvas.drawArc(RectF(3f, 2.5f, 21f, 21.5f), 185f, 170f, false, paint)
+            canvas.drawRoundRect(RectF(2.5f, 10f, 7f, 18f), 1.5f, 1.5f, paint)
+            canvas.drawRoundRect(RectF(17f, 10f, 21.5f, 18f), 1.5f, 1.5f, paint)
+            canvas.drawLine(5f, 13f, 5f, 16f, paint)
+            canvas.drawLine(19f, 13f, 19f, 16f, paint)
+        }
+
+        private fun drawSmartGlasses(canvas: Canvas) {
+            canvas.drawRoundRect(RectF(2.5f, 7f, 10.5f, 15f), 2f, 2f, paint)
+            canvas.drawRoundRect(RectF(13.5f, 7f, 21.5f, 15f), 2f, 2f, paint)
+            canvas.drawLine(10.5f, 9f, 13.5f, 9f, paint)
+            canvas.drawLine(2.5f, 9f, 1f, 7.5f, paint)
+            canvas.drawLine(21.5f, 9f, 23f, 7.5f, paint)
+            canvas.drawArc(RectF(6f, 15f, 18f, 22f), 10f, 160f, false, paint)
         }
 
         private fun drawHeadset(canvas: Canvas) {
