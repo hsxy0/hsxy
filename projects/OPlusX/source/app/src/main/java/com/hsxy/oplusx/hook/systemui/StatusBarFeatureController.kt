@@ -3,6 +3,7 @@ package com.hsxy.oplusx.hook.systemui
 import android.content.Context
 import android.database.ContentObserver
 import android.graphics.Canvas
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
@@ -187,11 +188,14 @@ class StatusBarFeatureController(
         val deviceType = route?.type ?: AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
         val resolvedName = route?.productName?.toString()?.takeIf { it.isNotBlank() } ?: routeLabel(deviceType)
         val routeKey = deviceType.toString() + "|" + resolvedName
-        if (routeKey == lastRouteKey) return
+        routeDrawable.setColor(resolveStatusBarIconTint())
+        if (routeKey == lastRouteKey) {
+            mediaIcon?.invalidate()
+            return
+        }
         lastRouteKey = routeKey
         routeName = resolvedName
         routeDrawable.setRoute(deviceType, resolvedName)
-        routeDrawable.setColor(resolveStatusBarIconTint())
         mediaIcon?.contentDescription = "媒体输出设备：$routeName"
         mediaIcon?.visibility = if (mediaEnabled) View.VISIBLE else View.GONE
         mediaIcon?.invalidate()
@@ -204,12 +208,29 @@ class StatusBarFeatureController(
             if (view == null) return null
             if (view is ImageView) {
                 view.imageTintList?.defaultColor?.let { return it }
-                view.drawable?.let { drawable ->
-                    if (android.os.Build.VERSION.SDK_INT >= 29) {
-                        drawable.colorFilter?.let { filter ->
-                            // ColorFilter is opaque; don't guess a color from it.
+                val source = view.drawable
+                if (source != null) {
+                    // Sample the already-tinted SystemUI drawable so both light and dark
+                    // status-bar themes are mirrored instead of choosing a fixed color.
+                    val sample = runCatching {
+                        val drawable = source.constantState?.newDrawable()?.mutate() ?: source
+                        val old = android.graphics.Rect(drawable.bounds)
+                        val bitmap = Bitmap.createBitmap(24, 24, Bitmap.Config.ARGB_8888)
+                        val canvas = Canvas(bitmap)
+                        drawable.setBounds(0, 0, 24, 24)
+                        drawable.draw(canvas)
+                        drawable.bounds = old
+                        var red = 0L; var green = 0L; var blue = 0L; var count = 0L
+                        for (y in 0 until 24) for (x in 0 until 24) {
+                            val pixel = bitmap.getPixel(x, y)
+                            if (Color.alpha(pixel) > 100) {
+                                red += Color.red(pixel); green += Color.green(pixel); blue += Color.blue(pixel); count++
+                            }
                         }
-                    }
+                        bitmap.recycle()
+                        if (count > 0) Color.rgb((red / count).toInt(), (green / count).toInt(), (blue / count).toInt()) else null
+                    }.getOrNull()
+                    if (sample != null) return sample
                 }
             }
             if (view is ViewGroup) {
@@ -314,7 +335,7 @@ class StatusBarFeatureController(
             when {
                 !isHeadset(routeType) -> drawSpeaker(canvas)
                 productName.contains("eyewear") || productName.contains("眼镜") -> drawSmartGlasses(canvas)
-                productName.contains("airpods") || productName.contains("freebuds 5") || productName.contains("半入耳") -> drawOpenFitBuds(canvas)
+                productName.contains("freebuds 5") || productName.contains("半入耳") -> drawOpenFitBuds(canvas)
                 productName.contains("wh-1000") || productName.contains("xm3") || productName.contains("头戴") -> drawOverEarHeadphones(canvas)
                 else -> drawInEarBuds(canvas)
             }
