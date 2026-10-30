@@ -10,6 +10,10 @@
         <meta-data android:name="xposeddescription" android:value="OPlusX - OnePlus 13 / ColorOS 15 personal toolbox" />
         <meta-data android:name="xposedminversion" android:value="93" />
         <meta-data android:name="xposedscope" android:resource="@array/module_scope" />
+        <provider
+            android:name=".OPlusXSettingsProvider"
+            android:authorities="com.hsxy.oplusx.config"
+            android:exported="true" />
         <activity
             android:name=".MainActivity"
             android:exported="true">
