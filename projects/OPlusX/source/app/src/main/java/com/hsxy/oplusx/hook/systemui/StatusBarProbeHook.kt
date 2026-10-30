@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicReference
 
 class StatusBarProbeHook : YukiBaseHooker() {
     private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
-    private val featureController by lazy { StatusBarFeatureController(appContext, mainHandler) }
+    private var featureController: StatusBarFeatureController? = null
     private val rootRef = AtomicReference<WeakReference<ViewGroup>?>(null)
     private val listenerRegistered = AtomicBoolean(false)
 
@@ -37,7 +37,8 @@ class StatusBarProbeHook : YukiBaseHooker() {
                     after {
                         val root = args.getOrNull(0) as? ViewGroup ?: return@after
                         rootRef.set(WeakReference(root))
-                        featureController.attach(root)
+                        val controller = featureController ?: StatusBarFeatureController(root.context, mainHandler).also { featureController = it }
+                        controller.attach(root)
                         registerProbeRequest()
                         YLog.info("OPlusX captured status bar root: " + root.javaClass.name)
                     }
