@@ -46,6 +46,7 @@ class StatusBarFeatureController(
     private var batteryIcon: ImageView? = null
     private var mediaIcon: ImageView? = null
     private var mask: BatteryMaskDrawable? = null
+    private var maskOnRoot: BatteryMaskDrawable? = null
     private var mediaEnabled = true
     private var maskEnabled = true
     private var routeName = "媒体输出设备"
@@ -110,12 +111,9 @@ class StatusBarFeatureController(
             }
         }
 
-        if (batteryImage != null) {
-            batteryImage.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-                updateMaskBounds()
-            }
-            updateMask()
-        }
+        battery?.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> updateMaskBounds() }
+        batteryImage?.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> updateMaskBounds() }
+        updateMask()
     }
 
     private fun registerSettingsObserver() {
@@ -258,35 +256,41 @@ class StatusBarFeatureController(
     }
 
     private fun updateMask() {
-        val image = batteryIcon ?: return
-        val existing = mask
+        val statusRoot = root ?: return
+        val battery = statusRoot.findViewById<View>(findId("battery")) ?: return
+        val image = batteryIcon
         if (!maskEnabled) {
-            if (existing != null) image.overlay.remove(existing)
+            mask?.let { image?.overlay?.remove(it) }
+            maskOnRoot?.let { statusRoot.overlay.remove(it) }
             mask = null
+            maskOnRoot = null
             return
         }
-        val drawable = existing ?: BatteryMaskDrawable(context.resources.displayMetrics.density).also {
-            mask = it
-            image.overlay.add(it)
+        // First try the status-bar root overlay. Unlike ImageView.overlay this can
+        // paint into the blank space immediately to the right of the battery view.
+        val drawable = maskOnRoot ?: BatteryMaskDrawable(context.resources.displayMetrics.density).also {
+            maskOnRoot = it
+            statusRoot.overlay.add(it)
         }
         updateMaskBounds()
         drawable.invalidateSelf()
     }
 
     private fun updateMaskBounds() {
-        val image = batteryIcon ?: return
-        val drawable = mask ?: return
-        val glyph = image.drawable?.bounds
-        val glyphLeft = glyph?.left ?: 0
-        val glyphRight = glyph?.right?.takeIf { it > glyphLeft } ?: image.width
-        val glyphTop = glyph?.top ?: 0
-        val glyphBottom = glyph?.bottom?.takeIf { it > glyphTop } ?: image.height
-        val width = dp(3)
-        val height = dp(4)
-        // Keep the mask a little inside the actual battery silhouette; never anchor to
-        // the ImageView's outer edge, which can include large transparent side margins.
-        val left = (glyphRight - width - dp(3)).coerceAtLeast(glyphLeft)
-        val top = (glyphTop + (glyphBottom - glyphTop - height) / 2).coerceAtLeast(0)
+        val statusRoot = root ?: return
+        val battery = statusRoot.findViewById<View>(findId("battery")) ?: return
+        val drawable = maskOnRoot ?: return
+        val rootLoc = IntArray(2)
+        val batteryLoc = IntArray(2)
+        statusRoot.getLocationOnScreen(rootLoc)
+        battery.getLocationOnScreen(batteryLoc)
+        val width = dp(4)
+        val height = dp(8)
+        // The mask belongs to the empty status-bar area after the battery, not
+        // inside the battery glyph. Clamp to the root bounds to avoid drawing off-screen.
+        val left = (batteryLoc[0] - rootLoc[0] + battery.width + dp(1))
+            .coerceAtMost(statusRoot.width - width).coerceAtLeast(0)
+        val top = (batteryLoc[1] - rootLoc[1] + (battery.height - height) / 2).coerceAtLeast(0)
         drawable.setBounds(left, top, left + width, top + height)
     }
 
@@ -333,11 +337,14 @@ class StatusBarFeatureController(
             val scale = minOf(b.width(), b.height()).toFloat() / 24f
             canvas.scale(scale, scale)
             when {
-                !isHeadset(routeType) -> drawSpeaker(canvas)
                 productName.contains("eyewear") || productName.contains("眼镜") -> drawSmartGlasses(canvas)
-                productName.contains("freebuds 5") || productName.contains("半入耳") -> drawOpenFitBuds(canvas)
+                productName.contains("airpods") -> drawEarMark(canvas)
                 productName.contains("wh-1000") || productName.contains("xm3") || productName.contains("头戴") -> drawOverEarHeadphones(canvas)
-                else -> drawInEarBuds(canvas)
+                productName.contains("freebuds 5") || productName.contains("freebuds5") || productName.contains("半入耳") -> drawEqualizer(canvas)
+                routeType == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> drawPhoneSpeaker(canvas)
+                isBluetooth(routeType) -> drawBluetooth(canvas)
+                routeType == AudioDeviceInfo.TYPE_WIRED_HEADSET || routeType == AudioDeviceInfo.TYPE_WIRED_HEADPHONES || routeType == AudioDeviceInfo.TYPE_USB_HEADSET -> drawEarMark(canvas)
+                else -> drawBluetooth(canvas)
             }
             canvas.restoreToCount(save)
         }
@@ -350,18 +357,50 @@ class StatusBarFeatureController(
             else -> false
         }
 
-        private fun drawSpeaker(canvas: Canvas) {
-            val speaker = Path().apply {
-                moveTo(3.5f, 9f); lineTo(7.5f, 9f); lineTo(12.5f, 5f)
-                lineTo(12.5f, 19f); lineTo(7.5f, 15f); lineTo(3.5f, 15f); close()
+        private fun isBluetooth(type: Int) = type == AudioDeviceInfo.TYPE_BLUETOOTH_A2DP ||
+            type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO || type == AudioDeviceInfo.TYPE_BLE_HEADSET ||
+            type == AudioDeviceInfo.TYPE_BLE_SPEAKER
+
+        private fun drawPhoneSpeaker(canvas: Canvas) {
+            // Match the reference: a phone/speaker glyph enclosed in a rounded rectangle.
+            canvas.drawRoundRect(RectF(3.5f, 2.5f, 20.5f, 21.5f), 2f, 2f, paint)
+            canvas.drawRoundRect(RectF(7f, 5f, 17f, 19f), 1.2f, 1.2f, paint)
+            canvas.drawCircle(12f, 16.5f, 0.8f, paint)
+            canvas.drawCircle(12f, 8f, 1.7f, paint)
+        }
+
+        private fun drawBluetooth(canvas: Canvas) {
+            val path = Path().apply {
+                moveTo(11f, 2.5f); lineTo(17f, 8f); lineTo(8f, 16f)
+                moveTo(11f, 2.5f); lineTo(11f, 21.5f); lineTo(17f, 16f); lineTo(8f, 8f)
             }
-            val old = paint.style
-            paint.style = Paint.Style.FILL
-            canvas.drawPath(speaker, paint)
-            paint.style = Paint.Style.STROKE
-            canvas.drawArc(RectF(10f, 7f, 19f, 17f), -55f, 110f, false, paint)
-            canvas.drawArc(RectF(9f, 3.5f, 23f, 20.5f), -52f, 104f, false, paint)
-            paint.style = old
+            canvas.drawPath(path, paint)
+        }
+
+        private fun drawEarMark(canvas: Canvas) {
+            // Ear-shaped mark shown in the supplied reference for AirPods 5.
+            val path = Path().apply {
+                moveTo(15.5f, 5f)
+                cubicTo(11f, 1.5f, 5f, 4.5f, 5.5f, 10f)
+                cubicTo(5.7f, 13f, 8f, 13.5f, 8f, 16f)
+                cubicTo(8f, 19f, 10f, 21f, 12.5f, 20f)
+                cubicTo(15f, 19f, 14.5f, 16f, 16.5f, 14f)
+                cubicTo(20f, 10.5f, 19f, 7f, 15.5f, 5f)
+            }
+            canvas.drawPath(path, paint)
+            canvas.drawPath(Path().apply {
+                moveTo(14.5f, 8f); cubicTo(11f, 6f, 9f, 9f, 10.5f, 11.5f)
+                cubicTo(12f, 13f, 12f, 15f, 10.5f, 16f)
+            }, paint)
+        }
+
+        private fun drawEqualizer(canvas: Canvas) {
+            canvas.drawLine(3f, 10f, 3f, 14f, paint)
+            canvas.drawLine(7f, 6f, 7f, 18f, paint)
+            canvas.drawLine(11f, 3f, 11f, 21f, paint)
+            canvas.drawLine(15f, 6f, 15f, 18f, paint)
+            canvas.drawLine(19f, 9f, 19f, 15f, paint)
+            canvas.drawLine(23f, 11f, 23f, 13f, paint)
         }
 
         private fun drawInEarBuds(canvas: Canvas) {
