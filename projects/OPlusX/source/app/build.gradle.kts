@@ -48,3 +48,19 @@ dependencies {
     implementation("com.github.kyuubiran:EzXHelper:2.2.1")
     ksp("com.highcapable.yukihookapi:ksp-xposed:1.3.1")
 }
+
+
+// YukiHookAPI 1.3.x KSP writes assets/xposed_init and
+// resources/META-INF/yukihookapi_init into the source tree.
+// Ensure Android's merge tasks run only after KSP has generated them.
+android.applicationVariants.configureEach {
+    val variantCap = name.replaceFirstChar { it.uppercase() }
+    val kspTaskName = "ksp${variantCap}Kotlin"
+
+    tasks.named("merge${variantCap}Assets").configure {
+        dependsOn(kspTaskName)
+    }
+    tasks.named("merge${variantCap}JavaResource").configure {
+        dependsOn(kspTaskName)
+    }
+}
